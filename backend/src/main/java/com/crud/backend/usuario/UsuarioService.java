@@ -38,4 +38,3 @@ public class UsuarioService {
         return usuarioRepository.save(usuario);
     }
 }
-// se caso você estiver se perguntando o porque eu ter colocado alguma coisa no service, é porque ele é resposavel pelas regras de negócio
