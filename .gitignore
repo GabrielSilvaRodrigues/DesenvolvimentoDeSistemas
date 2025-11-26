@@ -1,0 +1,4 @@
+backend/src/main/resources/application.properties
+start-dev.sh
+dev-start.ps1
+backend/.env

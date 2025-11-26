@@ -1,9 +1,12 @@
 package com.crud.backend.token;
 
+import java.time.LocalDateTime;
+
 import com.crud.backend.common.Auditable;
-import com.crud.backend.usuario.Usuario;
+import com.crud.backend.usuario.UsuarioEntity;
 import jakarta.persistence.*;
 import lombok.*;
+
 
 @Entity
 @Table(name = "token", indexes = {
@@ -15,7 +18,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Token extends Auditable {
+public class TokenEntity extends Auditable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -35,9 +38,13 @@ public class Token extends Auditable {
     private TokenEnum tipo;
 
     @Column(nullable = false)
+    @Builder.Default
     private boolean ativo = true;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)
-    private Usuario usuario;
+    private UsuarioEntity usuario;
+
+    @Column(name = "expira_em")
+    private LocalDateTime expiraEm;
 }

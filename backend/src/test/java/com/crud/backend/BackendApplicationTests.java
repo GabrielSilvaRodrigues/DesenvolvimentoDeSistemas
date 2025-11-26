@@ -1,10 +1,10 @@
-package com.crud.via_cep;
+package com.crud.backend;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class ViaCepApplicationTests {
+class BackendApplicationTests {
 
 	@Test
 	void contextLoads() {

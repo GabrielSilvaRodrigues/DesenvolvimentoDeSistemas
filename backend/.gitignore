@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Arquivos sensíveis em resources (ignore apenas os específicos)
+src/main/resources/application.properties
+src/main/resources/templates/client_secret_288953626303-04pjr9gettsejqma64qm95rmvia959jv.apps.googleusercontent.com.json

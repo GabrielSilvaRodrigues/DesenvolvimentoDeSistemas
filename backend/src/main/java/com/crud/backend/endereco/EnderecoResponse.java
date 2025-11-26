@@ -1,11 +1,10 @@
 package com.crud.backend.endereco;
 
-import com.crud.backend.endereco.Endereco;
-import com.crud.backend.viacep.ViaCepDTO;
+import com.crud.backend.viaCep.ViaCepDTO;
 import lombok.*;
 
 @Getter @Setter @AllArgsConstructor @NoArgsConstructor
 public class EnderecoResponse {
-    private Endereco endereco;
+    private EnderecoEntity endereco;
     private ViaCepDTO viaCep;
 }

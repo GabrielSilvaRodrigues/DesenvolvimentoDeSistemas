@@ -1,5 +1,11 @@
 package com.crud.backend.google;
 
+import org.springframework.security.oauth2.core.user.OAuth2User;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor
 public class GoogleDTO {
     private String googleId;
@@ -10,7 +16,7 @@ public class GoogleDTO {
     private String picture;
     private String locale;
 
-    public GoogleUserDTO(OAuth2User principal) {
+    public GoogleDTO(OAuth2User principal) {
         this.googleId = principal.getAttribute("sub");
         this.name = principal.getAttribute("name");
         this.givenName = principal.getAttribute("given_name");

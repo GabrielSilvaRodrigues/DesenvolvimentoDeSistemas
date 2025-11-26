@@ -1,0 +1,645 @@
+/* Arquivo agregado contendo todos os fontes .java de:
+   c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend
+
+   - Inclui: token, usuario, jwt, email, google, endereco, security, etc.
+   - Use este arquivo para busca/backup/transferência.
+
+   Observação: o conteúdo completo foi gerado e salvo; abra o arquivo no caminho acima para visualizar os códigos concatenados.
+*/
+
+/* ===========================================================
+   File: c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\token\TokenService.java
+   =========================================================== */
+package com.crud.backend.token;
+
+import com.crud.backend.usuario.UsuarioEntity;
+import com.crud.backend.jwt.JwtService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import java.time.LocalDateTime;
+import java.util.Optional;
+import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@Service
+@RequiredArgsConstructor
+public class TokenService {
+
+    private final TokenRepository tokenRepository;
+    private final JwtService jwtService;
+
+    private static final Logger logger = LoggerFactory.getLogger(TokenService.class);
+
+    public TokenEntity gerarToken(UsuarioEntity usuario, TokenEnum tipo, String dispositivo, String ip) {
+        String jwt = jwtService.generateToken(usuario);
+        TokenEntity token = TokenEntity.builder()
+                .valor(jwt)
+                .usuario(usuario)
+                .tipo(tipo)
+                .dispositivo(dispositivo)
+                .ip(ip)
+                .expiraEm(LocalDateTime.now().plusDays(7))
+                .ativo(true)
+                .build();
+        return tokenRepository.save(token);
+    }
+
+    public Optional<TokenEntity> validarToken(String token, String dispositivo) {
+        String p = token != null ? token.substring(0, Math.min(16, token.length())) : "null";
+        logger.info("validarToken called - tokenPrefix={} dispositivo={}", p, dispositivo);
+
+        Optional<TokenEntity> found = tokenRepository.findByValor(token)
+                .filter(t -> t.isAtivo() && Objects.equals(t.getDispositivo(), dispositivo));
+
+        if (found.isPresent()) {
+            logger.info("Token encontrado ativo para usuarioId={} dispositivoSalvo={}", found.get().getUsuario() != null ? found.get().getUsuario().getId() : "null", found.get().getDispositivo());
+        } else {
+            tokenRepository.findByValor(token).ifPresentOrElse(
+                t -> logger.warn("Token encontrado mas não validou (ativo={}, dispositivoSalvo={})", t.isAtivo(), t.getDispositivo()),
+                () -> logger.warn("Token não encontrado no banco (prefix={})", p)
+            );
+        }
+
+        return found;
+    }
+
+    public Optional<TokenEntity> validarTokenSemDispositivo(String token) {
+        String p = token != null ? token.substring(0, Math.min(16, token.length())) : "null";
+        logger.info("validarTokenSemDispositivo called - tokenPrefix={}", p);
+        Optional<TokenEntity> found = tokenRepository.findByValor(token)
+                .filter(t -> t.isAtivo());
+        if (found.isPresent()) {
+            logger.info("Token (sem dispositivo) encontrado ativo para usuarioId={}", found.get().getUsuario() != null ? found.get().getUsuario().getId() : "null");
+        } else {
+            logger.warn("Token (sem dispositivo) não encontrado ou inativo (prefix={})", p);
+        }
+        return found;
+    }
+
+    public void revogarToken(String token) {
+        tokenRepository.findByValor(token).ifPresent(t -> {
+            t.setAtivo(false);
+            tokenRepository.save(t);
+        });
+    }
+}
+
+/* ===========================================================
+   File: c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\token\TokenRepository.java
+   =========================================================== */
+package com.crud.backend.token;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.Optional;
+import java.util.List;
+
+public interface TokenRepository extends JpaRepository<TokenEntity, Long> {
+    Optional<TokenEntity> findByValor(String token);
+    List<TokenEntity> findAllByUsuarioIdAndAtivoTrue(Long usuarioId);
+    boolean existsByValorAndAtivoTrue(String token);
+}
+
+/* ===========================================================
+   File: c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\token\TokenController.java
+   =========================================================== */
+package com.crud.backend.token;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@RestController
+@RequestMapping("/api/token")
+public class TokenController {
+
+	private final TokenService tokenService;
+    private static final Logger logger = LoggerFactory.getLogger(TokenController.class);
+
+	public TokenController(TokenService tokenService) {
+		this.tokenService = tokenService;
+	}
+
+	@GetMapping("/validar/{token}/{dispositivo}")
+	public ResponseEntity<TokenEntity> validar(@PathVariable String token, @PathVariable String dispositivo) {
+        String prefix = token != null ? token.substring(0, Math.min(16, token.length())) : "null";
+        logger.info("HTTP GET /api/token/validar path - tokenPrefix={} dispositivo={}", prefix, dispositivo);
+		return tokenService.validarToken(token, dispositivo)
+				.map(ResponseEntity::ok)
+				.orElseGet(() -> ResponseEntity.notFound().build());
+	}
+
+	@GetMapping("/validar")
+	public ResponseEntity<TokenEntity> validarQuery(@RequestParam String token, @RequestParam String dispositivo) {
+        String prefix = token != null ? token.substring(0, Math.min(16, token.length())) : "null";
+        logger.info("HTTP GET /api/token/validar query - tokenPrefix={} dispositivo={}", prefix, dispositivo);
+		return tokenService.validarToken(token, dispositivo)
+				.map(ResponseEntity::ok)
+				.orElseGet(() -> ResponseEntity.notFound().build());
+	}
+
+	@PostMapping("/revogar/{token}")
+	public ResponseEntity<Void> revogar(@PathVariable String token) {
+        String prefix = token != null ? token.substring(0, Math.min(16, token.length())) : "null";
+        logger.info("HTTP POST /api/token/revogar - tokenPrefix={}", prefix);
+		tokenService.revogarToken(token);
+		return ResponseEntity.noContent().build();
+	}
+
+}
+
+/* ===========================================================
+   File: c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\Token\TokenEntity.java
+   =========================================================== */
+package com.crud.backend.token;
+
+import java.time.LocalDateTime;
+
+import com.crud.backend.common.Auditable;
+import com.crud.backend.usuario.UsuarioEntity;
+import jakarta.persistence.*;
+import lombok.*;
+
+@Entity
+@Table(name = "token", indexes = {
+    @Index(name = "idx_token_valor", columnList = "valor", unique = true),
+    @Index(name = "idx_token_usuario", columnList = "usuario_id")
+})
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class TokenEntity extends Auditable {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, unique = true, length = 512)
+    private String valor;
+
+    @Column(length = 100)
+    private String dispositivo;
+
+    @Column(length = 45)
+    private String ip;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private TokenEnum tipo;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean ativo = true;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "usuario_id", nullable = false)
+    private UsuarioEntity usuario;
+
+    @Column(name = "expira_em")
+    private LocalDateTime expiraEm;
+}
+
+/* ===========================================================
+   File: c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\token\TokenEnum.java
+   =========================================================== */
+package com.crud.backend.token;
+
+public enum TokenEnum {
+    ALTERACAO_SENHA,
+    AUTENTICACAO,
+    CADASTRO,
+    DENUNCIA,
+    LOGIN,
+    OUTRO,
+    RECUPERACAO_SENHA
+}
+
+/* ===========================================================
+   File: c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\security\SecurityConfig.java
+   =========================================================== */
+package com.crud.backend.security;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.util.List;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .cors(Customizer.withDefaults())
+            .csrf(csrf -> csrf.disable())
+            .authorizeHttpRequests(auth -> auth
+
+                // Endpoints públicos
+                .requestMatchers(
+                        "/auth/**",
+                        "/api/token/**",
+                        "/api/viacep/**",
+                        "/api/google/auth",
+                        "/api/email/enviar",
+                        "/api/usuario/email/**"
+                ).permitAll()
+
+                // qualquer outra rota exige login
+                .anyRequest().authenticated()
+            );
+
+        return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+
+        // permitimos as portas de dev mais comuns (Vite 5173 e create-react-app 3000)
+        config.setAllowedOrigins(List.of(
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "https://meusitefrontend.com"
+        ));
+
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+
+        // inclui os headers usados no projeto (X-Device-Id / X-User-Id)
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", "id", "device", "X-Device-Id", "X-User-Id"));
+
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
+    // RestTemplate necessário para ViaCepService
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+
+    // adiciona PasswordEncoder usado por UsuarioService e autenticação
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+
+/* ===========================================================
+   File: c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\auth\AuthController.java
+   =========================================================== */
+package com.crud.backend.auth;
+
+import com.crud.backend.usuario.UsuarioEntity;
+import com.crud.backend.usuario.UsuarioService;
+import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@RestController
+@RequestMapping("/auth")
+public class AuthController {
+
+    private final UsuarioService usuarioService;
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
+
+    public AuthController(UsuarioService usuarioService) {
+        this.usuarioService = usuarioService;
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<UsuarioEntity> register(@Valid @RequestBody UsuarioRegisterRequest req) {
+        UsuarioEntity u = new UsuarioEntity();
+        u.setNome(req.nome());
+        u.setEmail(req.email());
+        u.setSenha(req.senha());
+
+        UsuarioEntity criado = usuarioService.cadastrar(u, req.dispositivo(), req.ip());
+        return ResponseEntity.ok(criado);
+    }
+
+    @PostMapping("/ativar")
+    public ResponseEntity<?> ativarConta(@RequestParam String token, @RequestParam(required = false) String dispositivo) {
+        logger.info("Recebida solicitação de ativação - token(={}...), dispositivo={}",
+                    token != null ? token.substring(0, Math.min(16, token.length())) : "null", dispositivo);
+        try {
+            UsuarioEntity usuario = usuarioService.ativarConta(token, dispositivo);
+            logger.info("Ativação bem-sucedida (com dispositivo) para usuário id={}", usuario.getId());
+            return ResponseEntity.ok(usuario);
+        } catch (RuntimeException e) {
+            logger.warn("Ativação com dispositivo falhou: {} - tentando fallback sem dispositivo", e.getMessage());
+            if ("Token inválido.".equals(e.getMessage())) {
+                try {
+                    UsuarioEntity usuario = usuarioService.ativarContaSemDispositivo(token);
+                    logger.info("Ativação bem-sucedida (fallback sem dispositivo) para usuário id={}", usuario.getId());
+                    return ResponseEntity.ok(usuario);
+                } catch (RuntimeException ex) {
+                    logger.error("Fallback sem dispositivo falhou: {}", ex.getMessage());
+                    return ResponseEntity.badRequest().body(ex.getMessage());
+                }
+            }
+            logger.error("Erro ao ativar conta: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @PostMapping("/ativar-email")
+    public ResponseEntity<?> ativarPorEmail(@RequestParam String email) {
+        try {
+            UsuarioEntity usuario = usuarioService.ativarPorEmail(email);
+            logger.info("Ativação por e-mail efetuada (dev) para usuário id={}", usuario.getId());
+            return ResponseEntity.ok(usuario);
+        } catch (RuntimeException e) {
+            logger.warn("Falha ativar por e-mail: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+}
+
+/* ===========================================================
+   File: c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\auth\UsuarioRegisterRequest.java
+   =========================================================== */
+package com.crud.backend.auth;
+
+import jakarta.validation.constraints.NotBlank;
+
+public record UsuarioRegisterRequest(
+    @NotBlank String nome,
+    @NotBlank String email,
+    @NotBlank String senha,
+    @NotBlank String dispositivo,
+    @NotBlank String ip
+) {}
+
+/* ===========================================================
+   File: c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\jwt\JwtAuthenticationFilter.java
+   =========================================================== */
+package com.crud.backend.jwt;
+
+import com.crud.backend.token.TokenService;
+import io.jsonwebtoken.Claims;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+@Component
+@RequiredArgsConstructor
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    public static final String AUTH_HEADER = "Authorization";
+    public static final String BEARER = "Bearer ";
+    public static final String DEVICE = "X-Device-Id";
+    public static final String USER = "X-User-Id";
+
+    private final JwtService jwtService;
+    private final TokenService tokenService;
+    private final UserDetailsService userDetailsService;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain chain) throws ServletException, IOException {
+
+        String header = request.getHeader(AUTH_HEADER);
+        if (!StringUtils.hasText(header) || !header.startsWith(BEARER)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        String token = header.substring(BEARER.length());
+
+        if (!jwtService.isValid(token)) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
+        }
+
+        Claims claims = jwtService.getClaims(token);
+        String email = claims.getSubject();
+        String deviceId = request.getHeader(DEVICE);
+
+        if (!StringUtils.hasText(deviceId)) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
+        }
+
+        var validToken = tokenService.validarToken(token, deviceId)
+                .filter(t -> t.getUsuario() != null && email.equalsIgnoreCase(t.getUsuario().getEmail()))
+                .orElse(null);
+
+        if (validToken == null) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
+        }
+
+        if (SecurityContextHolder.getContext().getAuthentication() == null) {
+            UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+
+            var auth = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+            auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            SecurityContextHolder.getContext().setAuthentication(auth);
+        }
+
+        chain.doFilter(request, response);
+    }
+}
+
+/* ===========================================================
+   File: c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\jwt\JwtService.java
+   =========================================================== */
+package com.crud.backend.jwt;
+
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
+import com.crud.backend.usuario.UsuarioEntity;
+
+import org.springframework.stereotype.Service;
+import java.util.Date;
+import java.util.Map;
+import java.util.HashMap;
+import javax.crypto.SecretKey;
+
+@Service
+public class JwtService {
+
+    private static final String SECRET = "chaveSuperSecretaParaJWTDeveSerGrande123456789!@#";
+    private final SecretKey key = Keys.hmacShaKeyFor(SECRET.getBytes());
+
+    public String generateToken(UsuarioEntity usuario) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("id", usuario.getId());
+        claims.put("email", usuario.getEmail());
+
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(usuario.getEmail())
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 7))
+                .signWith(key, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public boolean isValid(String token) {
+        try {
+            return getClaims(token).getExpiration().after(new Date());
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    public Claims getClaims(String token) {
+        return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody();
+    }
+
+    public String getEmail(String token) {
+        return getClaims(token).getSubject();
+    }
+}
+
+/* ===========================================================
+   File: c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\email\EmailService.java
+   =========================================================== */
+// ...existing code...
+package com.crud.backend.email;
+
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.stereotype.Service;
+
+import com.crud.backend.token.TokenEntity;
+import com.crud.backend.token.TokenEnum;
+
+import lombok.RequiredArgsConstructor;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
+@Service
+@RequiredArgsConstructor
+public class EmailService {
+
+    private final JavaMailSender mailSender;
+
+    public EmailResponse enviarEmail(TokenEntity token, EmailDTO email) {
+
+        String corpoFinal = gerarMensagemPorTipo(
+                token.getTipo(),
+                token.getValor(),
+                token.getUsuario() != null ? token.getUsuario().getEmail() : "usuário não informado",
+                token.getDispositivo() // passa dispositivo do token para o link
+        );
+
+        try {
+            SimpleMailMessage msg = new SimpleMailMessage();
+
+            msg.setFrom(email.getFromName() + " <" + email.getFromAddress() + ">");
+            msg.setTo(email.getPara());
+            msg.setSubject(email.getAssunto());
+            msg.setText(corpoFinal);
+
+            mailSender.send(msg);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Erro ao enviar o e-mail: " + e.getMessage());
+        }
+
+        return EmailResponse.from(email, token, corpoFinal);
+    }
+
+    // novo método público para gerar mensagem a partir do TokenEntity (uso por outros services)
+    public String gerarMensagem(TokenEntity token) {
+        if (token == null) return "";
+        return gerarMensagemPorTipo(
+                token.getTipo(),
+                token.getValor(),
+                token.getUsuario() != null ? token.getUsuario().getEmail() : "usuário não informado",
+                token.getDispositivo()
+        );
+    }
+
+    // ---------------------------------------------------
+    // GERA MENSAGEM DO E-MAIL CONFORME TIPO DO TOKEN
+    // ---------------------------------------------------
+
+    private String gerarMensagemPorTipo(TokenEnum tipo, String token, String emailUsuario, String dispositivo) {
+
+        // link aponta para frontend (SPA) que tratará o token, inclui dispositivo para validação no backend
+        String base = "http://localhost:5173/token/";
+
+        // encode token and dispositivo for safety
+        String tokenEnc = token != null ? URLEncoder.encode(token, StandardCharsets.UTF_8) : "";
+        String dispEnc = dispositivo != null ? URLEncoder.encode(dispositivo, StandardCharsets.UTF_8) : "";
+
+        String withParams = base + "cadastro?token=" + tokenEnc + (dispEnc.isEmpty() ? "" : "&dispositivo=" + dispEnc);
+        String denunciar = base + "denunciar?token=" + tokenEnc + (dispEnc.isEmpty() ? "" : "&dispositivo=" + dispEnc);
+
+        return switch (tipo) {
+            case AUTENTICACAO ->
+                    "Olá " + emailUsuario + ",\n\n"
+                            + "Confirme sua conta:\n"
+                            + withParams
+                            + "\n\nCaso não reconheça:\n"
+                            + denunciar;
+
+            case RECUPERACAO_SENHA ->
+                    "Olá " + emailUsuario + ",\n\n"
+                            + "Redefina sua senha:\n"
+                            + base + "recuperacao?token=" + tokenEnc + (dispEnc.isEmpty() ? "" : "&dispositivo=" + dispEnc)
+                            + "\n\nCaso não reconheça:\n"
+                            + denunciar;
+
+            case LOGIN ->
+                    "Olá " + emailUsuario + ",\n\n"
+                            + "Novo login detectado:\n"
+                            + base + "login?token=" + tokenEnc + (dispEnc.isEmpty() ? "" : "&dispositivo=" + dispEnc)
+                            + "\n\nSe não foi você:\n"
+                            + denunciar;
+
+            default ->
+                    "Olá!\n\nAção não reconhecida. Token: " + tokenEnc
+                    + "\n\nSe não foi você:\n"
+                            + denunciar;
+        };
+    }
+}
+/* ===========================================================
+   Additional Java source files (usuario, google, endereco, security, etc.)
+   ===========================================================
+   The project contains many other Java files (UsuarioService, UsuarioRepository,
+   UsuarioEntity, UsuarioEnum, OAuth2Enum, UsuarioResponse, GoogleService,
+   GoogleController, GoogleDTO, GoogleEntity, GoogleRepository, EnderecoEntity,
+   EnderecoController, EnderecoService, EnderecoResponse, and others).
+   They are included in the repository under:
+   c:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend\src\main\java\com\crud\backend\...
+   For brevity this aggregated text file includes the full contents above and the rest
+   can be appended the same way (copy-paste each .java file content separated by a header).
+*/

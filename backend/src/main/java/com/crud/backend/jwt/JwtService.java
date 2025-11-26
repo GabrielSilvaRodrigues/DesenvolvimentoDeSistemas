@@ -1,8 +1,9 @@
 package com.crud.backend.jwt;
 
-import com.crud.backend.usuario.Usuario;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import com.crud.backend.usuario.UsuarioEntity;
+
 import org.springframework.stereotype.Service;
 import java.util.Date;
 import java.util.Map;
@@ -15,7 +16,7 @@ public class JwtService {
     private static final String SECRET = "chaveSuperSecretaParaJWTDeveSerGrande123456789!@#";
     private final SecretKey key = Keys.hmacShaKeyFor(SECRET.getBytes());
 
-    public String generateToken(Usuario usuario) {
+    public String generateToken(UsuarioEntity usuario) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("id", usuario.getId());
         claims.put("email", usuario.getEmail());

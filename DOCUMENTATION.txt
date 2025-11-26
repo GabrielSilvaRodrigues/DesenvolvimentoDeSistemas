@@ -1,0 +1,157 @@
+Documento: DOCUMENTATION.txt
+Projeto: DesenvolvimentoDeSistemas
+Data: 2025-11-14
+
+Sumário
+-------
+Este arquivo descreve a estrutura do projeto (backend + frontend), as APIs implementadas, detalhes de segurança/CORS e instruções de execução e teste.
+
+1) Estrutura do repositório (resumo)
+-----------------------------------
+- backend/
+  - src/main/java/com/crud/backend/
+    - email/        -> EmailService, EmailController (controller simples criado)
+    - endereco/     -> EnderecoService, EnderecoController (controller criado)
+    - google/       -> GoogleService, GoogleController (controller criado)
+    - jwt/          -> JwtService, JwtAuthenticationFilter (geração/validação de token JWT)
+    - security/     -> SecurityConfig (configura CORS e regras de autorização)
+    - token/        -> TokenService, TokenController (endpoints para validar/revogar token)
+    - usuario/      -> UsuarioService, UsuarioController
+    - viaCep/       -> ViaCepService, ViaCepController
+  - src/main/resources/application.properties -> configurações: BD, SMTP, OAuth2, etc.
+
+- frontend/
+  - src/
+    - api.js -> helpers para chamar o backend (inclui suporte a Authorization e X-Device-Id)
+    - components/
+      - CepLookup.jsx
+      - EnderecoForm.jsx
+      - UsuarioLookup.jsx
+    - App.jsx -> UI simples que usa os componentes
+  - package.json -> dependências e scripts (vite)
+
+2) APIs implementadas (endpoints relevantes)
+--------------------------------------------
+Obs: todos os endpoints criados no controller usam o prefixo /api (ex.: /api/endereco). O SecurityConfig permite publicamente apenas /auth/**; o resto requer autenticação JWT.
+
+- ViaCep
+  - GET /api/viacep/{cep}
+    - Retorna JSON com os dados do CEP (consome viacep.com.br internamente via ViaCepService).
+
+- Usuário
+  - GET /api/usuario/email/{email}
+    - Busca usuário por e-mail. Retorna 200 com UsuarioEntity JSON ou 404/erro conforme o caso.
+
+- Endereço
+  - POST /api/endereco
+    - Cria um endereço. Espera form-urlencoded com `cep`, `numero`, `complemento` (opcional).
+    - Retorna EnderecoResponse (união de EnderecoEntity + dados do ViaCep).
+  - GET /api/endereco/{id}
+    - Retorna EnderecoResponse para o id.
+  - PUT /api/endereco/{id}
+    - Atualiza endereço (params: cep, numero, complemento) e retorna EnderecoResponse.
+  - DELETE /api/endereco/{id}
+    - Deleta endereço.
+
+- Token
+  - GET  /api/token/validar/{token}/{dispositivo}
+    - Retorna TokenEntity se token válido para o dispositivo, ou null.
+  - POST /api/token/revogar/{token}
+    - Revoga (desativa) o token.
+
+- Email
+  - POST /api/email/enviar
+    - Parâmetros via RequestParam: tipo (TokenEnum), tokenValor, para, assunto, fromAddress, fromName
+    - Monta um TokenEntity mínimo + EmailDTO e chama EmailService.enviarEmail.
+
+- Google
+  - POST /api/google/auth
+    - POST com JSON no corpo (ex.: { googleId, email, name, picture?, locale?, dispositivo, ip })
+    - Monta um DefaultOAuth2User e chama GoogleService.autenticarGoogle, retornando TokenEntity.
+
+3) Segurança e CORS (comportamento atual)
+----------------------------------------
+Arquivos relevantes: `SecurityConfig.java`, `JwtService.java`, `JwtAuthenticationFilter.java`.
+
+- Regras principais
+  - `SecurityConfig` injeta CORS e desativa CSRF.
+  - Permite sem autenticação: `requestMatchers("/auth/**").permitAll()`.
+  - Qualquer outra requisição deve estar autenticada.
+
+- CORS (atual)
+  - Allowed origins configuradas atualmente:
+    - http://localhost:3000
+    - https://meusitefrontend.com
+  - Allowed methods: GET, POST, PUT, DELETE, OPTIONS
+  - Allowed headers: Authorization, Content-Type, id, device
+  - Allow credentials: true
+
+- JWT e cabeçalhos esperados
+  - `JwtAuthenticationFilter` espera:
+    - Header `Authorization: Bearer <token>` (obrigatório para tentar autenticação)
+    - Header `X-Device-Id` (lido como deviceHeader)
+    - Header `X-User-Id` (lido como userHeader, nem sempre necessário)
+  - O filtro valida o JWT via `JwtService.isValid()` e checa se existe um TokenEntity ativo com `tokenService.validarToken(jwt, deviceHeader)` combinado com email do subject do JWT.
+
+Observações de compatibilidade (dev)
+- O frontend dev server padrão do Vite usa `http://localhost:5173`, mas o backend só permite `http://localhost:3000` atualmente — isso causa problemas de CORS durante desenvolvimento.
+- `SecurityConfig` permite apenas os headers `Authorization` e `Content-Type`, `id`, `device` — enquanto o filtro usa `X-Device-Id` e `X-User-Id`. Recomenda-se alinhar esses nomes.
+
+4) Como o frontend foi feito e como funciona
+------------------------------------------
+- Arquivo principal: `frontend/src/api.js`
+  - `API_BASE` aponta para `http://localhost:8080/api`.
+  - Helpers adicionados:
+    - setAuthToken(token) / getAuthToken() — guardam token em localStorage (`auth_token`).
+    - setDeviceId(deviceId) / getDeviceId() — guardam device id em localStorage (`device_id`).
+    - defaultHeaders() monta headers padrão para todas as requisições: Authorization (se houver token) e X-Device-Id (se houver device).
+  - Funções de chamada aos endpoints: `fetchCep`, `criarEndereco`, `buscarUsuarioPorEmail` (atualizadas para enviar headers).
+
+- Componentes criados (exemplos)
+  - `CepLookup.jsx` — form simples para consultar CEP via /api/viacep/{cep}.
+  - `EnderecoForm.jsx` — cria endereço via POST /api/endereco (form-urlencoded).
+  - `UsuarioLookup.jsx` — busca usuário por e-mail via /api/usuario/email/{email}.
+  - `App.jsx` — organiza os componentes em uma UI simples para testes.
+
+Fluxo esperado de uso (dev)
+1) Gerar um device id no frontend (ex.: `web-<uuid>` ou `web-<timestamp>`) e chamá-lo com `setDeviceId(deviceId)`.
+2) Autenticar (endpoint público em `/auth/**` — verificar qual controller de autenticação do backend presente no projeto) para obter JWT. Ao receber JWT, chamar `setAuthToken(jwt)`.
+3) Fazer chamadas aos endpoints `/api/...` que agora incluirão automaticamente `Authorization` e `X-Device-Id`.
+
+5) Como executar localmente (passo-a-passo)
+-------------------------------------------
+Requisitos:
+- Java 17+ (compatível com o projeto Maven)
+- Maven (ou usar o `mvnw.cmd` incluído)
+- Node.js + npm
+
+A) Rodar o backend (PowerShell)
+```powershell
+cd 'C:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\backend'
+.\mvnw.cmd -DskipTests spring-boot:run
+```
+O backend por padrão inicia em `http://localhost:8080`.
+
+B) Rodar o frontend (PowerShell)
+```powershell
+cd 'C:\Users\IZAQUE LINO\Documents\GitHub\DesenvolvimentoDeSistemas\frontend'
+npm install
+npm run dev
+```
+Se preferir rodar na porta 3000 (para atender CORS atual do backend), configure o Vite para usar a porta 3000 ou exporte `PORT=3000` antes de rodar (no Windows PowerShell pode ser necessário usar `set` ou passar como opção ao Vite). Posso ajustar o comando conforme sua preferência.
+
+6) Recomendações e próximos passos
+---------------------------------
+- Durante desenvolvimento, alinhar o CORS do backend para incluir `http://localhost:5173` (ou rodar o frontend em porta 3000).
+- Atualizar `SecurityConfig` para permitir os headers `X-Device-Id` e `X-User-Id` (além de `Authorization` e `Content-Type`).
+- Implementar o fluxo de login no frontend (componente de login) que chama o endpoint público de autenticação (`/auth/**`), recebe o JWT e então chama `setAuthToken` e `setDeviceId`.
+- Em produção: mover `SECRET` do JWT e credenciais do SMTP para variáveis de ambiente/secret manager (não em texto plano no repo).
+- Melhorar tratamento de erros e loaders no frontend para UX.
+
+7) Contato rápido / debug
+-------------------------
+Se você quiser, eu posso:
+- Ajustar `SecurityConfig.java` para permitir `http://localhost:5173` e incluir `X-Device-Id`, `X-User-Id` nos allowed headers (alteração rápida para desenvolvimento), ou
+- Implementar um componente de login no frontend que autentica e armazena token/device automaticamente.
+
+Fim do documento.

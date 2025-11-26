@@ -1,7 +1,7 @@
 package com.crud.backend.usuario;
 
 public enum UsuarioEnum {
-    PEDENTE,
+    PENDENTE,
     BLOQUEADO,
     ATIVO,
     INATIVO,

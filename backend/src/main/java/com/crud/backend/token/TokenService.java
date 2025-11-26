@@ -1,6 +1,7 @@
 package com.crud.backend.token;
 
 import com.crud.backend.usuario.UsuarioEntity;
+import com.crud.backend.jwt.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
@@ -11,13 +12,14 @@ import java.util.Optional;
 public class TokenService {
 
     private final TokenRepository tokenRepository;
-    private final com.crud.backend.security.jwt.JwtService jwtService;
+    private final JwtService jwtService;
 
-    public TokenEntity gerarToken(Usuario usuario, String dispositivo, String ip) {
+    public TokenEntity gerarToken(UsuarioEntity usuario, TokenEnum tipo, String dispositivo, String ip) {
         String jwt = jwtService.generateToken(usuario);
         TokenEntity token = TokenEntity.builder()
-                .token(jwt)
+                .valor(jwt)
                 .usuario(usuario)
+                .tipo(tipo)
                 .dispositivo(dispositivo)
                 .ip(ip)
                 .expiraEm(LocalDateTime.now().plusDays(7))
@@ -27,12 +29,15 @@ public class TokenService {
     }
 
     public Optional<TokenEntity> validarToken(String token, String dispositivo) {
-        return tokenRepository.findByToken(token)
-                .filter(t -> t.isAtivo() && t.getDispositivo().equals(dispositivo));
+        return tokenRepository.findByValor(token)
+                .filter(TokenEntity::isAtivo)
+                .filter(t -> t.getDispositivo().equals(dispositivo))
+                .filter(t -> t.getExpiraEm().isAfter(LocalDateTime.now()));
     }
 
+
     public void revogarToken(String token) {
-        tokenRepository.findByToken(token).ifPresent(t -> {
+        tokenRepository.findByValor(token).ifPresent(t -> {
             t.setAtivo(false);
             tokenRepository.save(t);
         });

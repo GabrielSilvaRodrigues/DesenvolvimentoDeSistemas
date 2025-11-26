@@ -1,8 +1,12 @@
 package com.crud.backend.token;
 
 public enum TokenEnum {
-    LOGIN,
-    EMAIL_VERIFICACAO,
+    CADASTRO,
     RECUPERACAO_SENHA,
+    DENUNCIA,
+    ALTERACAO_SENHA,
+    AUTENTICACAO,
+    LOGIN,
     OUTRO
 }
+
